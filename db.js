@@ -118,11 +118,21 @@ async function setupDB() {
 
     if (isPostgres) {
       await dbInstance.query(schema);
+      
+      // Auto-migrate missing columns for existing PostgreSQL databases
+      await dbInstance.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS role VARCHAR(50) DEFAULT 'patient';").catch(e => console.log('Migration Notice:', e.message));
+      await dbInstance.query("ALTER TABLE patients ADD COLUMN IF NOT EXISTS user_id INTEGER REFERENCES users(user_id) ON DELETE CASCADE;").catch(e => console.log('Migration Notice:', e.message));
+      
       await dbInstance.query('CREATE INDEX IF NOT EXISTS idx_sessions_patient_date ON sessions(patient_id, session_date);').catch(()=>{});
       await dbInstance.query('CREATE INDEX IF NOT EXISTS idx_readings_session ON sensor_readings(session_id, ts);').catch(()=>{});
       await dbInstance.query('CREATE INDEX IF NOT EXISTS idx_alerts_patient ON alerts(patient_id, alert_time);').catch(()=>{});
     } else {
       await dbInstance.exec(schema);
+      
+      // Auto-migrate missing columns for existing SQLite databases (ignores error if column exists)
+      try { await dbInstance.exec("ALTER TABLE users ADD COLUMN role VARCHAR(50) DEFAULT 'patient';"); } catch(e) {}
+      try { await dbInstance.exec("ALTER TABLE patients ADD COLUMN user_id INTEGER REFERENCES users(user_id) ON DELETE CASCADE;"); } catch(e) {}
+      
       await dbInstance.exec('CREATE INDEX IF NOT EXISTS idx_sessions_patient_date ON sessions(patient_id, session_date);');
       await dbInstance.exec('CREATE INDEX IF NOT EXISTS idx_readings_session ON sensor_readings(session_id, ts);');
       await dbInstance.exec('CREATE INDEX IF NOT EXISTS idx_alerts_patient ON alerts(patient_id, alert_time);');
