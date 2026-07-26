@@ -58,6 +58,7 @@ async function setupDB() {
 
       CREATE TABLE IF NOT EXISTS patients (
         patient_id ${pk},
+        user_id INTEGER,
         email VARCHAR(255) UNIQUE,
         password VARCHAR(255),
         full_name VARCHAR(255) NOT NULL,
@@ -69,7 +70,8 @@ async function setupDB() {
         battery_level REAL DEFAULT NULL,
         firmware_version VARCHAR(50) DEFAULT NULL,
         profile_image TEXT DEFAULT NULL,
-        created_at ${tsDefault}
+        created_at ${tsDefault},
+        FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
       );
 
       CREATE TABLE IF NOT EXISTS sessions (

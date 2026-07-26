@@ -30,7 +30,7 @@ const bcrypt = require('bcryptjs');
 //  API: Auth Routes
 // ============================================================
 
-// Register a new Admin/Therapist
+// Register a new Admin/Doctor/Patient
 app.post('/api/auth/register', async (req, res) => {
   try {
     const { email, password, full_name, role } = req.body;
@@ -41,18 +41,31 @@ app.post('/api/auth/register', async (req, res) => {
     if (existing) {
       return res.status(400).json({ ok: false, error: 'Email already exists' });
     }
+    
+    const userRole = (role === 'doctor' || role === 'patient') ? role : 'patient';
     const hashedPassword = await bcrypt.hash(password, 10);
+    
     const result = await db.run(
       'INSERT INTO users (email, password, full_name, role) VALUES (?, ?, ?, ?)',
-      [email, hashedPassword, full_name, role || 'therapist']
+      [email, hashedPassword, full_name, userRole]
     );
-    res.json({ ok: true, user_id: result.lastID });
+    
+    const userId = result.lastID;
+    
+    if (userRole === 'patient') {
+      await db.run(
+        'INSERT INTO patients (user_id, email, password, full_name) VALUES (?, ?, ?, ?)',
+        [userId, email, hashedPassword, full_name]
+      );
+    }
+    
+    res.json({ ok: true, user_id: userId, role: userRole });
   } catch (err) {
     res.status(500).json({ ok: false, error: err.message });
   }
 });
 
-// Login Admin/Therapist
+// Login User
 app.post('/api/auth/login', async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -67,8 +80,31 @@ app.post('/api/auth/login', async (req, res) => {
     if (!isValid) {
       return res.status(401).json({ ok: false, error: 'Invalid credentials' });
     }
-    // In production, sign and return a JWT token here
-    res.json({ ok: true, user: { user_id: user.user_id, email: user.email, full_name: user.full_name, role: user.role } });
+    
+    let patientId = null;
+    if (user.role === 'patient') {
+      const patient = await db.get('SELECT patient_id FROM patients WHERE user_id = ?', [user.user_id]);
+      if (patient) {
+        patientId = patient.patient_id;
+      }
+    }
+    
+    res.json({ ok: true, user: { user_id: user.user_id, email: user.email, full_name: user.full_name, role: user.role, patient_id: patientId } });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// Get all patients (For Doctor Dashboard)
+app.get('/api/patients', async (req, res) => {
+  try {
+    const patients = await db.all(`
+      SELECT p.patient_id, p.full_name, p.age, p.gender, p.condition_desc, p.device_id,
+             (SELECT MAX(session_date) FROM sessions WHERE patient_id = p.patient_id) as last_session
+      FROM patients p
+      ORDER BY p.patient_id DESC
+    `);
+    res.json({ ok: true, data: patients });
   } catch (err) {
     res.status(500).json({ ok: false, error: err.message });
   }
