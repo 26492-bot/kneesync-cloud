@@ -181,8 +181,49 @@
       box-shadow: var(--shadow-md);
     }
     
+    /* Admin Dashboard Styles */
+    .admin-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 24px;
+      background: var(--bg-card);
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+      border: 1px solid var(--border);
+    }
+    .admin-table th, .admin-table td {
+      padding: 16px;
+      text-align: left;
+      border-bottom: 1px solid var(--border);
+      font-size: 14px;
+    }
+    .admin-table th {
+      background: var(--bg-secondary);
+      color: var(--text-muted);
+      font-weight: 700;
+      text-transform: uppercase;
+      font-size: 12px;
+      letter-spacing: 0.05em;
+    }
+    .admin-table tr:last-child td { border-bottom: none; }
+    .btn-delete {
+      background: rgba(244, 63, 94, 0.1);
+      color: var(--accent-rose);
+      border: 1px solid rgba(244, 63, 94, 0.3);
+      padding: 6px 12px;
+      border-radius: var(--radius-sm);
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: var(--transition);
+    }
+    .btn-delete:hover {
+      background: var(--accent-rose);
+      color: white;
+    }
+    
     /* Views */
-    #patientDashboardView, #doctorDashboardView { display: none; }
+    #patientDashboardView, #doctorDashboardView, #adminDashboardView { display: none; }
   </style>
 </head>
 <body>
@@ -271,6 +312,44 @@
       <!-- Patients will be injected here -->
       <div class="empty-state">Loading patients...</div>
     </div>
+  </div>
+
+
+  <!-- ================= ADMIN DASHBOARD VIEW ================= -->
+  <div class="app-container" id="adminDashboardView">
+    <header class="app-header">
+      <div class="logo-group">
+        <div class="logo-icon" style="background: var(--grad-purple);">A</div>
+        <div class="logo-text">
+          <span class="logo-name">KneeSync AI</span>
+          <span class="logo-sub">Admin Console</span>
+        </div>
+      </div>
+      <div style="display: flex; align-items: center; gap: 16px;">
+        <span class="text-secondary" style="font-weight: 600;" id="adminWelcome">System Administrator</span>
+        <button class="btn-logout" id="btnAdminLogout">Logout</button>
+      </div>
+    </header>
+
+    <div class="page-header">
+      <h1 class="page-title">User Management</h1>
+      <p class="page-subtitle">Manage all accounts in the system. Deleting a user will permanently remove all their associated data.</p>
+    </div>
+
+    <table class="admin-table">
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Name</th>
+          <th>Email</th>
+          <th>Role</th>
+          <th>Action</th>
+        </tr>
+      </thead>
+      <tbody id="adminUserList">
+        <tr><td colspan="5" class="empty-state">Loading users...</td></tr>
+      </tbody>
+    </table>
   </div>
 
 

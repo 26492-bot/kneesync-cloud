@@ -110,6 +110,37 @@ app.get('/api/patients', async (req, res) => {
   }
 });
 
+// ============================================================
+//  API: Admin Routes
+// ============================================================
+
+// Get all users
+app.get('/api/admin/users', async (req, res) => {
+  try {
+    const users = await db.all('SELECT user_id, full_name, email, role, created_at FROM users ORDER BY created_at DESC');
+    res.json({ ok: true, data: users });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// Delete user by ID
+app.delete('/api/admin/users/:id', async (req, res) => {
+  try {
+    const userId = parseInt(req.params.id);
+    if (!userId) {
+      return res.status(400).json({ ok: false, error: 'Invalid user ID' });
+    }
+    
+    await db.run('DELETE FROM users WHERE user_id = ?', [userId]);
+    // Note: Due to ON DELETE CASCADE on foreign keys, patients/sessions/readings/alerts will be deleted automatically.
+    
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
 // Initialize DB before starting server
 let db;
 setupDB().then(database => {

@@ -14,6 +14,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const vAuth = document.getElementById('authView');
   const vDoc = document.getElementById('doctorDashboardView');
   const vPat = document.getElementById('patientDashboardView');
+  const vAdmin = document.getElementById('adminDashboardView');
   
   // Auth Elements
   const tabLogin = document.getElementById('tabLogin');
@@ -24,6 +25,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const btnDocLogout = document.getElementById('btnDocLogout');
   const btnPatSelfLogout = document.getElementById('btnPatSelfLogout');
   const btnPatLogout = document.getElementById('btnPatLogout'); // For doc to return to list
+  const btnAdminLogout = document.getElementById('btnAdminLogout');
   const docWelcome = document.getElementById('docWelcome');
   
   // Tab Switching
@@ -117,11 +119,13 @@ document.addEventListener('DOMContentLoaded', () => {
     stopPolling();
     vDoc.style.display = 'none';
     vPat.style.display = 'none';
+    vAdmin.style.display = 'none';
     vAuth.style.display = 'flex';
   }
   
   btnDocLogout.addEventListener('click', logout);
   btnPatSelfLogout.addEventListener('click', logout);
+  btnAdminLogout.addEventListener('click', logout);
   
   btnPatLogout.addEventListener('click', () => {
     // Doctor returns to patient list
@@ -136,18 +140,23 @@ document.addEventListener('DOMContentLoaded', () => {
       vAuth.style.display = 'flex';
       vDoc.style.display = 'none';
       vPat.style.display = 'none';
+      vAdmin.style.display = 'none';
       return;
     }
     
     vAuth.style.display = 'none';
+    vDoc.style.display = 'none';
+    vPat.style.display = 'none';
+    vAdmin.style.display = 'none';
     
-    if (currentUser.role === 'doctor') {
+    if (currentUser.role === 'admin') {
+      vAdmin.style.display = 'block';
+      loadAdminUsers();
+    } else if (currentUser.role === 'doctor') {
       vDoc.style.display = 'block';
-      vPat.style.display = 'none';
       docWelcome.textContent = `Welcome, Dr. ${currentUser.full_name}`;
       loadPatientsList();
     } else if (currentUser.role === 'patient') {
-      vDoc.style.display = 'none';
       vPat.style.display = 'block';
       // Hide back button for patients, show logout
       btnPatLogout.style.display = 'none';
@@ -157,6 +166,55 @@ document.addEventListener('DOMContentLoaded', () => {
       startPatientDashboard();
     }
   }
+
+  // ==========================================
+  // Admin Dashboard Logic
+  // ==========================================
+  async function loadAdminUsers() {
+    const tbody = document.getElementById('adminUserList');
+    try {
+      const res = await fetch(`${API_URL}/admin/users`);
+      const data = await res.json();
+      if (data.ok) {
+        if (data.data.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="5" class="empty-state">No users found.</td></tr>';
+          return;
+        }
+        tbody.innerHTML = data.data.map(u => {
+          const isMe = u.user_id === currentUser.user_id;
+          return `
+            <tr>
+              <td>#${u.user_id}</td>
+              <td style="font-weight:600;">${u.full_name}</td>
+              <td>${u.email}</td>
+              <td><span style="background:var(--bg-glass); padding:4px 8px; border-radius:4px; font-size:12px; font-weight:700;">${u.role.toUpperCase()}</span></td>
+              <td>
+                ${!isMe ? `<button class="btn-delete" onclick="deleteUser(${u.user_id})">Delete</button>` : '<span style="color:var(--text-muted); font-size:12px;">(You)</span>'}
+              </td>
+            </tr>
+          `;
+        }).join('');
+      }
+    } catch(err) {
+      tbody.innerHTML = '<tr><td colspan="5" class="empty-state" style="color:var(--accent-rose);">Error loading users.</td></tr>';
+    }
+  }
+
+  window.deleteUser = async function(userId) {
+    if (confirm('Are you sure you want to delete this user? ALL their associated data (patients, sessions, readings) will be permanently lost!')) {
+      try {
+        const res = await fetch(`${API_URL}/admin/users/${userId}`, { method: 'DELETE' });
+        const data = await res.json();
+        if (data.ok) {
+          loadAdminUsers(); // Refresh table
+        } else {
+          alert('Failed to delete user: ' + (data.error || 'Unknown error'));
+        }
+      } catch (err) {
+        alert('Connection error while deleting.');
+      }
+    }
+  };
   
   // ==========================================
   // Doctor Dashboard Logic

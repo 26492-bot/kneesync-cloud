@@ -7,6 +7,7 @@ const sqlite3 = require('sqlite3');
 const { open } = require('sqlite');
 const { Pool } = require('pg');
 const path = require('path');
+const bcrypt = require('bcryptjs');
 
 let dbPromise = null;
 let isPostgres = false;
@@ -136,6 +137,30 @@ async function setupDB() {
       await dbInstance.exec('CREATE INDEX IF NOT EXISTS idx_sessions_patient_date ON sessions(patient_id, session_date);');
       await dbInstance.exec('CREATE INDEX IF NOT EXISTS idx_readings_session ON sensor_readings(session_id, ts);');
       await dbInstance.exec('CREATE INDEX IF NOT EXISTS idx_alerts_patient ON alerts(patient_id, alert_time);');
+    }
+    
+    // Seed Admin User
+    let checkAdminSql = "SELECT user_id FROM users WHERE email = 'admin@kneesync.com'";
+    let adminExists = false;
+    if (isPostgres) {
+      const res = await dbInstance.query(checkAdminSql);
+      adminExists = res.rows.length > 0;
+    } else {
+      const res = await dbInstance.get(checkAdminSql);
+      adminExists = !!res;
+    }
+
+    if (!adminExists) {
+      console.log('🌱 Seeding default Admin user...');
+      const adminPass = await bcrypt.hash('AdminSync!2026', 10);
+      const insertAdminSql = "INSERT INTO users (email, password, full_name, role) VALUES ($1, $2, $3, $4)";
+      const insertAdminSqlite = "INSERT INTO users (email, password, full_name, role) VALUES (?, ?, ?, ?)";
+      
+      if (isPostgres) {
+        await dbInstance.query(insertAdminSql, ['admin@kneesync.com', adminPass, 'System Administrator', 'admin']);
+      } else {
+        await dbInstance.run(insertAdminSqlite, ['admin@kneesync.com', adminPass, 'System Administrator', 'admin']);
+      }
     }
 
     console.log('✅ Database Schema Initialized. (Mock data seeding removed for production)');
