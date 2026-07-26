@@ -7,10 +7,143 @@
   <link rel="stylesheet" href="styles.css">
   <!-- Chart.js -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    /* Additional Styles for Login View */
+    .login-view {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      padding: 24px;
+    }
+    .login-box {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 40px;
+      width: 100%;
+      max-width: 420px;
+      backdrop-filter: blur(12px);
+      box-shadow: var(--shadow-lg);
+    }
+    .login-header {
+      text-align: center;
+      margin-bottom: 32px;
+    }
+    .login-header .logo-icon {
+      margin: 0 auto 16px;
+      width: 64px;
+      height: 64px;
+      font-size: 32px;
+    }
+    .form-group {
+      margin-bottom: 20px;
+    }
+    .form-label {
+      display: block;
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--text-secondary);
+      margin-bottom: 8px;
+    }
+    .form-input {
+      width: 100%;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      color: var(--text-primary);
+      padding: 12px 16px;
+      border-radius: var(--radius-sm);
+      font-family: inherit;
+      font-size: 14px;
+      transition: var(--transition);
+    }
+    .form-input:focus {
+      outline: none;
+      border-color: var(--accent-blue);
+      box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+    }
+    .btn-primary {
+      width: 100%;
+      background: var(--grad-blue);
+      color: white;
+      border: none;
+      padding: 14px;
+      border-radius: var(--radius-sm);
+      font-weight: 800;
+      font-size: 15px;
+      cursor: pointer;
+      transition: var(--transition);
+      font-family: inherit;
+    }
+    .btn-primary:hover {
+      box-shadow: var(--shadow-glow-blue);
+      transform: translateY(-1px);
+    }
+    .login-error {
+      color: var(--accent-rose);
+      background: rgba(244, 63, 94, 0.1);
+      border: 1px solid rgba(244, 63, 94, 0.3);
+      padding: 12px;
+      border-radius: var(--radius-sm);
+      font-size: 13px;
+      font-weight: 600;
+      margin-bottom: 20px;
+      display: none;
+      text-align: center;
+    }
+    
+    /* Hide dashboard initially */
+    #dashboardView {
+      display: none;
+    }
+    
+    .btn-logout {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--border);
+      color: var(--text-secondary);
+      padding: 6px 12px;
+      border-radius: var(--radius-sm);
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: var(--transition);
+    }
+    .btn-logout:hover {
+      background: rgba(255, 255, 255, 0.1);
+      color: var(--text-primary);
+    }
+  </style>
 </head>
 <body>
 
-  <div class="app-container">
+  <!-- ================= LOGIN VIEW ================= -->
+  <div class="login-view" id="loginView">
+    <div class="login-box">
+      <div class="login-header">
+        <div class="logo-icon">K</div>
+        <h1 class="page-title" style="font-size: 24px; margin-bottom: 4px;">KneeSync AI</h1>
+        <p class="page-subtitle" style="font-size: 13px;">Therapist Portal Login</p>
+      </div>
+      
+      <div class="login-error" id="loginError">Invalid credentials</div>
+      
+      <form id="loginForm">
+        <div class="form-group">
+          <label class="form-label">Email Address</label>
+          <input type="email" id="loginEmail" class="form-input" placeholder="doctor@hospital.com" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Password</label>
+          <input type="password" id="loginPassword" class="form-input" placeholder="••••••••" required>
+        </div>
+        <button type="submit" class="btn-primary" id="loginBtn">Secure Login</button>
+      </form>
+    </div>
+  </div>
+
+
+  <!-- ================= DASHBOARD VIEW ================= -->
+  <div class="app-container" id="dashboardView">
     
     <!-- Header -->
     <header class="app-header">
@@ -22,9 +155,12 @@
         </div>
       </div>
       
-      <div id="connectionStatus" class="status-badge offline">
-        <span class="live-dot"></span>
-        <span id="statusText">Connecting...</span>
+      <div style="display: flex; align-items: center; gap: 16px;">
+        <div id="connectionStatus" class="status-badge offline">
+          <span class="live-dot"></span>
+          <span id="statusText">Connecting...</span>
+        </div>
+        <button class="btn-logout" id="btnLogout">Logout</button>
       </div>
     </header>
 
@@ -39,7 +175,7 @@
     <div class="patient-bar">
       <div class="patient-avatar" id="patientAvatar">?</div>
       <div class="patient-info">
-        <div class="patient-name" id="patientName">Loading Patient...</div>
+        <div class="patient-name" id="patientName">Loading...</div>
         <div class="patient-meta">
           <span id="patientDetails">-- Years · --</span>
           <span id="patientCondition">--</span>
@@ -58,8 +194,8 @@
           <span class="stat-label">Gait Quality</span>
           <span class="stat-target">Target: >80</span>
         </div>
-        <div class="stat-value good" id="statGait">--</div>
-        <div class="stat-diff" id="diffGait">Loading...</div>
+        <div class="stat-value neutral" id="statGait">--</div>
+        <div class="stat-diff" id="diffGait">--</div>
       </div>
       
       <div class="stat-card risk">
@@ -67,8 +203,8 @@
           <span class="stat-label">Fall Risk</span>
           <span class="stat-target">Target: <40</span>
         </div>
-        <div class="stat-value warn" id="statRisk">--</div>
-        <div class="stat-diff" id="diffRisk">Loading...</div>
+        <div class="stat-value neutral" id="statRisk">--</div>
+        <div class="stat-diff" id="diffRisk">--</div>
       </div>
 
       <div class="stat-card steps">
@@ -76,8 +212,8 @@
           <span class="stat-label">Total Steps</span>
           <span class="stat-target">Today</span>
         </div>
-        <div class="stat-value blue" id="statSteps">--</div>
-        <div class="stat-diff" id="diffSteps">Loading...</div>
+        <div class="stat-value neutral" id="statSteps">--</div>
+        <div class="stat-diff" id="diffSteps">--</div>
       </div>
 
       <div class="stat-card angle">
@@ -85,7 +221,7 @@
           <span class="stat-label">Avg Knee Angle</span>
           <span class="stat-target" id="baselineAngle">Baseline: --°</span>
         </div>
-        <div class="stat-value purple" id="statAvgAngle">--°</div>
+        <div class="stat-value neutral" id="statAvgAngle">--°</div>
         <div class="stat-diff neutral">Session Average</div>
       </div>
     </div>
@@ -101,7 +237,7 @@
           <div class="sensor-card">
             <div class="sensor-label">Current Knee Angle</div>
             <div class="sensor-value text-primary" id="liveAngle">--<span class="sensor-unit">°</span></div>
-            <div class="gait-indicator stance" id="gaitPhase">--</div>
+            <div class="gait-indicator stance" id="gaitPhase" style="background: transparent; border-color: var(--border); color: var(--text-muted);">--</div>
           </div>
           <div class="sensor-card">
             <div class="sensor-label">Tremor RMS</div>
@@ -114,7 +250,7 @@
         <div class="card" style="margin-bottom: 20px;">
           <div class="card-header">
             <h3 class="card-title">Live Knee Flexion (Real-time)</h3>
-            <span class="card-badge live">Live Stream</span>
+            <span class="card-badge live" id="chartLiveBadge" style="display:none;">Live Stream</span>
           </div>
           <div class="chart-container">
             <canvas id="realtimeChart"></canvas>
@@ -143,7 +279,7 @@
             <span class="card-badge" style="background:rgba(255,255,255,0.1);" id="alertCount">0</span>
           </div>
           <ul class="alert-list" id="alertList">
-            <div class="empty-state">Loading alerts...</div>
+            <div class="empty-state">No recent alerts</div>
           </ul>
         </div>
 
@@ -157,7 +293,7 @@
             <div style="font-size:13px; font-weight:700; color:var(--text-secondary);">Battery Level</div>
             <div class="battery-bar">
               <div class="battery-visual">
-                <div class="battery-fill" id="batteryFill" style="width:0%"></div>
+                <div class="battery-fill" id="batteryFill" style="width:0%; background: var(--bg-glass);"></div>
               </div>
               <div class="battery-text" id="batteryText">--%</div>
             </div>
