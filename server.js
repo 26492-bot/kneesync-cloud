@@ -23,6 +23,57 @@ app.use(express.urlencoded({ extended: true }));
 // Serve static frontend files
 app.use(express.static(path.join(__dirname, 'public')));
 
+// Dependencies for Auth
+const bcrypt = require('bcryptjs');
+
+// ============================================================
+//  API: Auth Routes
+// ============================================================
+
+// Register a new Admin/Therapist
+app.post('/api/auth/register', async (req, res) => {
+  try {
+    const { email, password, full_name, role } = req.body;
+    if (!email || !password || !full_name) {
+      return res.status(400).json({ ok: false, error: 'Missing required fields' });
+    }
+    const existing = await db.get('SELECT user_id FROM users WHERE email = ?', [email]);
+    if (existing) {
+      return res.status(400).json({ ok: false, error: 'Email already exists' });
+    }
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const result = await db.run(
+      'INSERT INTO users (email, password, full_name, role) VALUES (?, ?, ?, ?)',
+      [email, hashedPassword, full_name, role || 'therapist']
+    );
+    res.json({ ok: true, user_id: result.lastID });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// Login Admin/Therapist
+app.post('/api/auth/login', async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    if (!email || !password) {
+      return res.status(400).json({ ok: false, error: 'Missing credentials' });
+    }
+    const user = await db.get('SELECT * FROM users WHERE email = ?', [email]);
+    if (!user) {
+      return res.status(401).json({ ok: false, error: 'Invalid credentials' });
+    }
+    const isValid = await bcrypt.compare(password, user.password);
+    if (!isValid) {
+      return res.status(401).json({ ok: false, error: 'Invalid credentials' });
+    }
+    // In production, sign and return a JWT token here
+    res.json({ ok: true, user: { user_id: user.user_id, email: user.email, full_name: user.full_name, role: user.role } });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
 // Initialize DB before starting server
 let db;
 setupDB().then(database => {
