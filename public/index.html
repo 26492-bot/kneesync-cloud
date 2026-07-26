@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>KneeSync AI — Live Dashboard</title>
+  <link rel="stylesheet" href="styles.css">
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+
+  <div class="app-container">
+    
+    <!-- Header -->
+    <header class="app-header">
+      <div class="logo-group">
+        <div class="logo-icon">K</div>
+        <div class="logo-text">
+          <span class="logo-name">KneeSync AI</span>
+          <span class="logo-sub">Cloud Monitor</span>
+        </div>
+      </div>
+      
+      <div id="connectionStatus" class="status-badge offline">
+        <span class="live-dot"></span>
+        <span id="statusText">Connecting...</span>
+      </div>
+    </header>
+
+    <!-- Page Title -->
+    <div class="page-header">
+      <div class="page-eyebrow">Real-time Telemetry</div>
+      <h1 class="page-title">Patient Dashboard</h1>
+      <p class="page-subtitle">Live sensor data stream directly from the ESP32 wearable device, updated every 5 seconds.</p>
+    </div>
+
+    <!-- Patient Info Bar -->
+    <div class="patient-bar">
+      <div class="patient-avatar" id="patientAvatar">?</div>
+      <div class="patient-info">
+        <div class="patient-name" id="patientName">Loading Patient...</div>
+        <div class="patient-meta">
+          <span id="patientDetails">-- Years · --</span>
+          <span id="patientCondition">--</span>
+          <div class="device-tag">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="2"></rect><path d="M12 2v2M12 20v2M2 12h2M20 12h2"></path></svg>
+            <span id="deviceId">Device: --</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Stats Grid -->
+    <div class="stats-grid">
+      <div class="stat-card gait">
+        <div class="stat-card-header">
+          <span class="stat-label">Gait Quality</span>
+          <span class="stat-target">Target: >80</span>
+        </div>
+        <div class="stat-value good" id="statGait">--</div>
+        <div class="stat-diff" id="diffGait">Loading...</div>
+      </div>
+      
+      <div class="stat-card risk">
+        <div class="stat-card-header">
+          <span class="stat-label">Fall Risk</span>
+          <span class="stat-target">Target: <40</span>
+        </div>
+        <div class="stat-value warn" id="statRisk">--</div>
+        <div class="stat-diff" id="diffRisk">Loading...</div>
+      </div>
+
+      <div class="stat-card steps">
+        <div class="stat-card-header">
+          <span class="stat-label">Total Steps</span>
+          <span class="stat-target">Today</span>
+        </div>
+        <div class="stat-value blue" id="statSteps">--</div>
+        <div class="stat-diff" id="diffSteps">Loading...</div>
+      </div>
+
+      <div class="stat-card angle">
+        <div class="stat-card-header">
+          <span class="stat-label">Avg Knee Angle</span>
+          <span class="stat-target" id="baselineAngle">Baseline: --°</span>
+        </div>
+        <div class="stat-value purple" id="statAvgAngle">--°</div>
+        <div class="stat-diff neutral">Session Average</div>
+      </div>
+    </div>
+
+    <!-- Content Grid -->
+    <div class="content-grid">
+      
+      <!-- Main Content (Left) -->
+      <div class="main-column">
+        
+        <!-- Sensor Cards -->
+        <div class="sensor-grid">
+          <div class="sensor-card">
+            <div class="sensor-label">Current Knee Angle</div>
+            <div class="sensor-value text-primary" id="liveAngle">--<span class="sensor-unit">°</span></div>
+            <div class="gait-indicator stance" id="gaitPhase">--</div>
+          </div>
+          <div class="sensor-card">
+            <div class="sensor-label">Tremor RMS</div>
+            <div class="sensor-value text-secondary" id="liveTremor">--<span class="sensor-unit"> Hz</span></div>
+            <div class="text-muted" style="font-size:12px; margin-top:4px;">Threshold: 0.12 Hz</div>
+          </div>
+        </div>
+
+        <!-- Real-time Chart -->
+        <div class="card" style="margin-bottom: 20px;">
+          <div class="card-header">
+            <h3 class="card-title">Live Knee Flexion (Real-time)</h3>
+            <span class="card-badge live">Live Stream</span>
+          </div>
+          <div class="chart-container">
+            <canvas id="realtimeChart"></canvas>
+          </div>
+        </div>
+
+        <!-- History Chart (Gait & Risk) -->
+        <div class="card">
+          <div class="card-header">
+            <h3 class="card-title">Rehabilitation Progress (Last 7 Days)</h3>
+          </div>
+          <div class="chart-container medium">
+            <canvas id="historyChart"></canvas>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Sidebar Content (Right) -->
+      <div class="side-column">
+        
+        <!-- Alerts -->
+        <div class="card" style="margin-bottom: 20px;">
+          <div class="card-header">
+            <h3 class="card-title">Recent Alerts</h3>
+            <span class="card-badge" style="background:rgba(255,255,255,0.1);" id="alertCount">0</span>
+          </div>
+          <ul class="alert-list" id="alertList">
+            <div class="empty-state">Loading alerts...</div>
+          </ul>
+        </div>
+
+        <!-- Device Info -->
+        <div class="card">
+          <div class="card-header">
+            <h3 class="card-title">Hardware Status</h3>
+          </div>
+          
+          <div class="device-info-card">
+            <div style="font-size:13px; font-weight:700; color:var(--text-secondary);">Battery Level</div>
+            <div class="battery-bar">
+              <div class="battery-visual">
+                <div class="battery-fill" id="batteryFill" style="width:0%"></div>
+              </div>
+              <div class="battery-text" id="batteryText">--%</div>
+            </div>
+
+            <div class="info-rows">
+              <div class="info-row">
+                <span class="info-row-label">Firmware</span>
+                <span class="info-row-value" id="firmwareVer">--</span>
+              </div>
+              <div class="info-row">
+                <span class="info-row-label">Last Sync</span>
+                <span class="info-row-value" id="lastSync">--</span>
+              </div>
+              <div class="info-row">
+                <span class="info-row-label">Session Duration</span>
+                <span class="info-row-value" id="sessionDur">-- min</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+    
+    <footer class="app-footer">
+      <p class="footer-text"><strong>KneeSync AI</strong> · Cloud Backend running on Node.js & Supabase/SQLite</p>
+      <div class="last-updated" id="lastUpdated">Updated: --</div>
+    </footer>
+
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
