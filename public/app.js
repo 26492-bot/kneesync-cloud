@@ -1,5 +1,8 @@
 /* ============================================================
    KneeSync AI — Public Dashboard Logic (Role-Based Auth)
+   - Baseline calibration status display
+   - Admin role promotion
+   - Patient-only registration
    ============================================================ */
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -71,10 +74,10 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
   
+  // Register — always as patient (no role selector)
   registerForm.addEventListener('submit', async (e) => {
     e.preventDefault();
     authError.style.display = 'none';
-    const role = document.querySelector('input[name="role"]:checked').value;
     const full_name = document.getElementById('regName').value;
     const email = document.getElementById('regEmail').value;
     const password = document.getElementById('regPassword').value;
@@ -83,7 +86,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const res = await fetch(`${API_URL}/auth/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password, full_name, role })
+        body: JSON.stringify({ email, password, full_name })
       });
       const data = await res.json();
       if (data.ok) {
@@ -182,13 +185,16 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         tbody.innerHTML = data.data.map(u => {
           const isMe = u.user_id === currentUser.user_id;
+          const roleLabel = u.role.toUpperCase();
+          const canPromote = !isMe && u.role === 'patient';
           return `
             <tr>
               <td>#${u.user_id}</td>
               <td style="font-weight:600;">${u.full_name}</td>
               <td>${u.email}</td>
-              <td><span style="background:var(--bg-glass); padding:4px 8px; border-radius:4px; font-size:12px; font-weight:700;">${u.role.toUpperCase()}</span></td>
+              <td><span style="background:var(--bg-glass); padding:4px 8px; border-radius:4px; font-size:12px; font-weight:700;">${roleLabel}</span></td>
               <td>
+                ${canPromote ? `<button class="btn-promote" onclick="promoteUser(${u.user_id}, '${u.full_name}')">Promote to Doctor</button>` : ''}
                 ${!isMe ? `<button class="btn-delete" onclick="deleteUser(${u.user_id})">Delete</button>` : '<span style="color:var(--text-muted); font-size:12px;">(You)</span>'}
               </td>
             </tr>
@@ -199,6 +205,33 @@ document.addEventListener('DOMContentLoaded', () => {
       tbody.innerHTML = '<tr><td colspan="5" class="empty-state" style="color:var(--accent-rose);">Error loading users.</td></tr>';
     }
   }
+
+  window.promoteUser = async function(userId, userName) {
+    const adminPassword = prompt(`To promote "${userName}" to Doctor, enter your Admin password:`);
+    if (!adminPassword) return;
+    
+    try {
+      const res = await fetch(`${API_URL}/admin/promote`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          user_id: userId,
+          new_role: 'doctor',
+          admin_email: currentUser.email,
+          admin_password: adminPassword
+        })
+      });
+      const data = await res.json();
+      if (data.ok) {
+        alert(`✅ ${userName} has been promoted to Doctor!`);
+        loadAdminUsers();
+      } else {
+        alert('❌ Failed: ' + (data.error || 'Unknown error'));
+      }
+    } catch (err) {
+      alert('Connection error while promoting.');
+    }
+  };
 
   window.deleteUser = async function(userId) {
     if (confirm('Are you sure you want to delete this user? ALL their associated data (patients, sessions, readings) will be permanently lost!')) {
@@ -230,6 +263,17 @@ document.addEventListener('DOMContentLoaded', () => {
           return;
         }
         container.innerHTML = data.data.map(p => {
+          const bStatus = p.baseline_status || 'pending';
+          const bSamples = p.baseline_samples || 0;
+          let badgeHTML = '';
+          if (bStatus === 'calibrated') {
+            badgeHTML = '<span class="baseline-badge calibrated">✅ Calibrated</span>';
+          } else if (bStatus === 'calibrating') {
+            badgeHTML = `<span class="baseline-badge calibrating">📊 Calibrating (${bSamples}/10)</span>`;
+          } else {
+            badgeHTML = '<span class="baseline-badge pending">⏳ Awaiting Data</span>';
+          }
+
           return `
             <div class="patient-list-card" data-pid="${p.patient_id}">
               <div style="display:flex; align-items:center; gap:12px; margin-bottom:12px;">
@@ -242,6 +286,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 </div>
               </div>
               <div style="font-size:13px; color:var(--text-secondary); margin-bottom:4px;">Device: ${p.device_id || 'Not assigned'}</div>
+              <div style="display:flex; align-items:center; gap:8px; margin-bottom:4px;">
+                ${badgeHTML}
+              </div>
               <div style="font-size:12px; color:var(--text-muted);">Last Sync: ${p.last_session || 'No data'}</div>
             </div>
           `;
@@ -281,6 +328,10 @@ document.addEventListener('DOMContentLoaded', () => {
     patientCondition: document.getElementById('patientCondition'),
     deviceId: document.getElementById('deviceId'),
     baselineAngle: document.getElementById('baselineAngle'),
+    baselineBadge: document.getElementById('baselineBadge'),
+    baselineBadgeIcon: document.getElementById('baselineBadgeIcon'),
+    baselineBadgeText: document.getElementById('baselineBadgeText'),
+    btnRecalibrate: document.getElementById('btnRecalibrate'),
     statGait: document.getElementById('statGait'),
     diffGait: document.getElementById('diffGait'),
     statRisk: document.getElementById('statRisk'),
@@ -299,6 +350,25 @@ document.addEventListener('DOMContentLoaded', () => {
     alertList: document.getElementById('alertList'),
     alertCount: document.getElementById('alertCount')
   };
+
+  // Recalibrate button handler
+  els.btnRecalibrate.addEventListener('click', async () => {
+    if (!activePatientId) return;
+    if (!confirm('Reset baseline? The system will recalibrate from the next 10 steps.')) return;
+    
+    try {
+      const res = await fetch(`${API_URL}/patient/${activePatientId}/recalibrate`, { method: 'POST' });
+      const data = await res.json();
+      if (data.ok) {
+        alert('✅ Baseline reset! Will recalibrate from next 10 steps.');
+        fetchPatientData(); // Refresh
+      } else {
+        alert('❌ Failed: ' + (data.error || 'Unknown error'));
+      }
+    } catch (err) {
+      alert('Connection error.');
+    }
+  });
 
   let rtChart = null;
   let histChart = null;
@@ -336,6 +406,31 @@ document.addEventListener('DOMContentLoaded', () => {
     els.liveTremor.textContent = '-- Hz';
     els.gaitPhase.textContent = '--';
     els.alertList.innerHTML = '';
+    updateBaselineBadge('pending', 0);
+  }
+
+  function updateBaselineBadge(status, samples, mean, sd, angle) {
+    const badge = els.baselineBadge;
+    const icon = els.baselineBadgeIcon;
+    const text = els.baselineBadgeText;
+    const recalBtn = els.btnRecalibrate;
+
+    badge.className = 'baseline-badge ' + (status || 'pending');
+
+    if (status === 'calibrated') {
+      icon.textContent = '✅';
+      text.textContent = `Calibrated (${angle || '--'}°)`;
+      // Show recalibrate for doctors only
+      recalBtn.style.display = (currentUser && currentUser.role === 'doctor') ? 'inline-block' : 'none';
+    } else if (status === 'calibrating') {
+      icon.textContent = '📊';
+      text.textContent = `Calibrating (${samples || 0}/10 steps)`;
+      recalBtn.style.display = 'none';
+    } else {
+      icon.textContent = '⏳';
+      text.textContent = 'Awaiting First Steps';
+      recalBtn.style.display = 'none';
+    }
   }
 
   async function fetchPatientData() {
@@ -352,6 +447,15 @@ document.addEventListener('DOMContentLoaded', () => {
         els.patientCondition.textContent = p.condition_desc || 'No condition specified';
         els.deviceId.textContent = `Device: ${p.device_id || '--'}`;
         els.baselineAngle.textContent = `Baseline: ${p.baseline_angle || '--'}°`;
+
+        // Update baseline calibration status badge
+        updateBaselineBadge(
+          p.baseline_status,
+          p.baseline_samples,
+          p.baseline_mean,
+          p.baseline_sd,
+          p.baseline_angle
+        );
 
         if (ls) {
           els.statGait.textContent = ls.gait_score;

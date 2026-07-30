@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>KneeSync AI — Live Dashboard</title>
+  <meta name="description" content="KneeSync AI — Personalized Knee Rehabilitation Monitoring with Adaptive Algorithm">
   <link rel="stylesheet" href="styles.css">
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
@@ -85,34 +86,6 @@
       border-color: var(--accent-blue);
       box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
     }
-    
-    /* Role Selector */
-    .role-selector {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 12px;
-      margin-bottom: 20px;
-    }
-    .role-option {
-      position: relative;
-      border: 1px solid var(--border);
-      border-radius: var(--radius-sm);
-      padding: 12px;
-      text-align: center;
-      cursor: pointer;
-      transition: var(--transition);
-    }
-    .role-option input { display: none; }
-    .role-option span {
-      font-size: 14px;
-      font-weight: 700;
-      color: var(--text-secondary);
-    }
-    .role-option input:checked + span { color: var(--accent-blue); }
-    .role-option:has(input:checked) {
-      border-color: var(--accent-blue);
-      background: rgba(59, 130, 246, 0.1);
-    }
 
     .btn-primary {
       width: 100%;
@@ -142,6 +115,14 @@
       margin-bottom: 20px;
       display: none;
       text-align: center;
+    }
+
+    .register-note {
+      text-align: center;
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-top: 16px;
+      line-height: 1.6;
     }
 
     .btn-logout {
@@ -221,6 +202,71 @@
       background: var(--accent-rose);
       color: white;
     }
+    .btn-promote {
+      background: rgba(16, 185, 129, 0.1);
+      color: var(--accent-emerald);
+      border: 1px solid rgba(16, 185, 129, 0.3);
+      padding: 6px 12px;
+      border-radius: var(--radius-sm);
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: var(--transition);
+      margin-right: 6px;
+    }
+    .btn-promote:hover {
+      background: var(--accent-emerald);
+      color: white;
+    }
+
+    /* Baseline Status Badge */
+    .baseline-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 0.03em;
+    }
+    .baseline-badge.pending {
+      background: rgba(245, 158, 11, 0.15);
+      color: #f59e0b;
+      border: 1px solid rgba(245, 158, 11, 0.3);
+    }
+    .baseline-badge.calibrating {
+      background: rgba(59, 130, 246, 0.15);
+      color: #3b82f6;
+      border: 1px solid rgba(59, 130, 246, 0.3);
+      animation: pulse-badge 2s infinite;
+    }
+    .baseline-badge.calibrated {
+      background: rgba(16, 185, 129, 0.15);
+      color: #10b981;
+      border: 1px solid rgba(16, 185, 129, 0.3);
+    }
+    @keyframes pulse-badge {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.6; }
+    }
+
+    .btn-recalibrate {
+      background: rgba(139, 92, 246, 0.1);
+      color: var(--accent-violet);
+      border: 1px solid rgba(139, 92, 246, 0.3);
+      padding: 4px 10px;
+      border-radius: var(--radius-sm);
+      font-size: 11px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: var(--transition);
+      margin-left: 8px;
+    }
+    .btn-recalibrate:hover {
+      background: var(--accent-violet);
+      color: white;
+    }
     
     /* Views */
     #patientDashboardView, #doctorDashboardView, #adminDashboardView { display: none; }
@@ -257,18 +303,8 @@
         <button type="submit" class="btn-primary" id="loginBtn">Secure Login</button>
       </form>
 
-      <!-- Register Form -->
+      <!-- Register Form (Patient only — Doctors/Admin promoted by admin) -->
       <form id="registerForm" style="display: none;">
-        <div class="role-selector">
-          <label class="role-option">
-            <input type="radio" name="role" value="patient" checked>
-            <span>Patient</span>
-          </label>
-          <label class="role-option">
-            <input type="radio" name="role" value="doctor">
-            <span>Doctor</span>
-          </label>
-        </div>
         <div class="form-group">
           <label class="form-label">Full Name</label>
           <input type="text" id="regName" class="form-input" required>
@@ -281,7 +317,11 @@
           <label class="form-label">Password</label>
           <input type="password" id="regPassword" class="form-input" required>
         </div>
-        <button type="submit" class="btn-primary" id="regBtn">Create Account</button>
+        <button type="submit" class="btn-primary" id="regBtn">Create Patient Account</button>
+        <div class="register-note">
+          📋 สมัครสมาชิกเป็นผู้ป่วยเท่านั้น<br>
+          ต้องการสิทธิ์แพทย์? กรุณาติดต่อผู้ดูแลระบบ
+        </div>
       </form>
     </div>
   </div>
@@ -333,7 +373,7 @@
 
     <div class="page-header">
       <h1 class="page-title">User Management</h1>
-      <p class="page-subtitle">Manage all accounts in the system. Deleting a user will permanently remove all their associated data.</p>
+      <p class="page-subtitle">Manage all accounts in the system. Promote patients to doctor role or delete users.</p>
     </div>
 
     <table class="admin-table">
@@ -391,6 +431,13 @@
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="2"></rect><path d="M12 2v2M12 20v2M2 12h2M20 12h2"></path></svg>
             <span id="deviceId">Device: --</span>
           </div>
+        </div>
+        <div style="margin-top: 8px; display: flex; align-items: center; gap: 8px;">
+          <span class="baseline-badge pending" id="baselineBadge">
+            <span id="baselineBadgeIcon">⏳</span>
+            <span id="baselineBadgeText">Pending Calibration</span>
+          </span>
+          <button class="btn-recalibrate" id="btnRecalibrate" style="display: none;" title="Reset and recalibrate baseline from next 10 steps">🔄 Recalibrate</button>
         </div>
       </div>
     </div>

@@ -8,6 +8,7 @@ const { open } = require('sqlite');
 const { Pool } = require('pg');
 const path = require('path');
 const bcrypt = require('bcryptjs');
+const crypto = require('crypto');
 
 let dbPromise = null;
 let isPostgres = false;
@@ -53,7 +54,7 @@ async function setupDB() {
         email VARCHAR(255) UNIQUE NOT NULL,
         password VARCHAR(255) NOT NULL,
         full_name VARCHAR(255) NOT NULL,
-        role VARCHAR(50) DEFAULT 'therapist',
+        role VARCHAR(50) DEFAULT 'patient',
         created_at ${tsDefault}
       );
 
@@ -66,7 +67,15 @@ async function setupDB() {
         age INTEGER,
         gender VARCHAR(50),
         condition_desc TEXT,
-        baseline_angle REAL DEFAULT 58.30,
+        baseline_angle REAL DEFAULT NULL,
+        baseline_status VARCHAR(20) DEFAULT 'pending',
+        baseline_samples INTEGER DEFAULT 0,
+        baseline_mean REAL DEFAULT NULL,
+        baseline_sd REAL DEFAULT NULL,
+        running_avg_tilt REAL DEFAULT 0,
+        running_avg_tremor REAL DEFAULT 0,
+        running_avg_angle REAL DEFAULT 0,
+        reading_count INTEGER DEFAULT 0,
         device_id VARCHAR(100),
         battery_level REAL DEFAULT NULL,
         firmware_version VARCHAR(50) DEFAULT NULL,
@@ -115,31 +124,69 @@ async function setupDB() {
         detail TEXT,
         FOREIGN KEY (patient_id) REFERENCES patients(patient_id) ON DELETE CASCADE
       );
+
+      CREATE TABLE IF NOT EXISTS baseline_steps (
+        step_id ${pk},
+        patient_id INTEGER NOT NULL,
+        knee_angle REAL NOT NULL,
+        recorded_at VARCHAR(50) NOT NULL,
+        FOREIGN KEY (patient_id) REFERENCES patients(patient_id) ON DELETE CASCADE
+      );
     `;
 
     if (isPostgres) {
       await dbInstance.query(schema);
       
       // Auto-migrate missing columns for existing PostgreSQL databases
-      await dbInstance.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS role VARCHAR(50) DEFAULT 'patient';").catch(e => console.log('Migration Notice:', e.message));
-      await dbInstance.query("ALTER TABLE patients ADD COLUMN IF NOT EXISTS user_id INTEGER REFERENCES users(user_id) ON DELETE CASCADE;").catch(e => console.log('Migration Notice:', e.message));
+      const pgMigrations = [
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS role VARCHAR(50) DEFAULT 'patient';",
+        "ALTER TABLE patients ADD COLUMN IF NOT EXISTS user_id INTEGER REFERENCES users(user_id) ON DELETE CASCADE;",
+        "ALTER TABLE patients ADD COLUMN IF NOT EXISTS baseline_status VARCHAR(20) DEFAULT 'pending';",
+        "ALTER TABLE patients ADD COLUMN IF NOT EXISTS baseline_samples INTEGER DEFAULT 0;",
+        "ALTER TABLE patients ADD COLUMN IF NOT EXISTS baseline_mean REAL DEFAULT NULL;",
+        "ALTER TABLE patients ADD COLUMN IF NOT EXISTS baseline_sd REAL DEFAULT NULL;",
+        "ALTER TABLE patients ADD COLUMN IF NOT EXISTS running_avg_tilt REAL DEFAULT 0;",
+        "ALTER TABLE patients ADD COLUMN IF NOT EXISTS running_avg_tremor REAL DEFAULT 0;",
+        "ALTER TABLE patients ADD COLUMN IF NOT EXISTS running_avg_angle REAL DEFAULT 0;",
+        "ALTER TABLE patients ADD COLUMN IF NOT EXISTS reading_count INTEGER DEFAULT 0;",
+      ];
+      for (const sql of pgMigrations) {
+        await dbInstance.query(sql).catch(e => console.log('Migration Notice:', e.message));
+      }
       
       await dbInstance.query('CREATE INDEX IF NOT EXISTS idx_sessions_patient_date ON sessions(patient_id, session_date);').catch(()=>{});
       await dbInstance.query('CREATE INDEX IF NOT EXISTS idx_readings_session ON sensor_readings(session_id, ts);').catch(()=>{});
       await dbInstance.query('CREATE INDEX IF NOT EXISTS idx_alerts_patient ON alerts(patient_id, alert_time);').catch(()=>{});
+      await dbInstance.query('CREATE INDEX IF NOT EXISTS idx_baseline_steps_patient ON baseline_steps(patient_id);').catch(()=>{});
     } else {
       await dbInstance.exec(schema);
       
       // Auto-migrate missing columns for existing SQLite databases (ignores error if column exists)
-      try { await dbInstance.exec("ALTER TABLE users ADD COLUMN role VARCHAR(50) DEFAULT 'patient';"); } catch(e) {}
-      try { await dbInstance.exec("ALTER TABLE patients ADD COLUMN user_id INTEGER REFERENCES users(user_id) ON DELETE CASCADE;"); } catch(e) {}
+      const sqliteMigrations = [
+        "ALTER TABLE users ADD COLUMN role VARCHAR(50) DEFAULT 'patient';",
+        "ALTER TABLE patients ADD COLUMN user_id INTEGER REFERENCES users(user_id) ON DELETE CASCADE;",
+        "ALTER TABLE patients ADD COLUMN baseline_status VARCHAR(20) DEFAULT 'pending';",
+        "ALTER TABLE patients ADD COLUMN baseline_samples INTEGER DEFAULT 0;",
+        "ALTER TABLE patients ADD COLUMN baseline_mean REAL DEFAULT NULL;",
+        "ALTER TABLE patients ADD COLUMN baseline_sd REAL DEFAULT NULL;",
+        "ALTER TABLE patients ADD COLUMN running_avg_tilt REAL DEFAULT 0;",
+        "ALTER TABLE patients ADD COLUMN running_avg_tremor REAL DEFAULT 0;",
+        "ALTER TABLE patients ADD COLUMN running_avg_angle REAL DEFAULT 0;",
+        "ALTER TABLE patients ADD COLUMN reading_count INTEGER DEFAULT 0;",
+      ];
+      for (const sql of sqliteMigrations) {
+        try { await dbInstance.exec(sql); } catch(e) {}
+      }
       
       await dbInstance.exec('CREATE INDEX IF NOT EXISTS idx_sessions_patient_date ON sessions(patient_id, session_date);');
       await dbInstance.exec('CREATE INDEX IF NOT EXISTS idx_readings_session ON sensor_readings(session_id, ts);');
       await dbInstance.exec('CREATE INDEX IF NOT EXISTS idx_alerts_patient ON alerts(patient_id, alert_time);');
+      try { await dbInstance.exec('CREATE INDEX IF NOT EXISTS idx_baseline_steps_patient ON baseline_steps(patient_id);'); } catch(e) {}
     }
     
-    // Seed Admin User
+    // ============================================================
+    //  Seed Admin User (password from env, NOT hardcoded)
+    // ============================================================
     let checkAdminSql = "SELECT user_id FROM users WHERE email = 'admin@kneesync.com'";
     let adminExists = false;
     if (isPostgres) {
@@ -152,7 +199,22 @@ async function setupDB() {
 
     if (!adminExists) {
       console.log('🌱 Seeding default Admin user...');
-      const adminPass = await bcrypt.hash('AdminSync!2026', 10);
+      
+      // Read password from env variable; generate random if not set
+      let adminPassword = process.env.ADMIN_DEFAULT_PASSWORD;
+      if (!adminPassword) {
+        adminPassword = crypto.randomBytes(12).toString('base64url');
+        console.log('');
+        console.log('  ╔══════════════════════════════════════════════════════════╗');
+        console.log('  ║  ⚠️  No ADMIN_DEFAULT_PASSWORD set in .env              ║');
+        console.log(`  ║  🔑 Generated Admin Password: ${adminPassword.padEnd(20)}   ║`);
+        console.log('  ║  📧 Admin Email: admin@kneesync.com                     ║');
+        console.log('  ║  💾 Save this password! It won\'t be shown again.        ║');
+        console.log('  ╚══════════════════════════════════════════════════════════╝');
+        console.log('');
+      }
+      
+      const adminPass = await bcrypt.hash(adminPassword, 10);
       const insertAdminSql = "INSERT INTO users (email, password, full_name, role) VALUES ($1, $2, $3, $4)";
       const insertAdminSqlite = "INSERT INTO users (email, password, full_name, role) VALUES (?, ?, ?, ?)";
       
@@ -163,7 +225,7 @@ async function setupDB() {
       }
     }
 
-    console.log('✅ Database Schema Initialized. (Mock data seeding removed for production)');
+    console.log('✅ Database Schema Initialized.');
 
     // Wrapper Object to handle dialect differences
     return {
