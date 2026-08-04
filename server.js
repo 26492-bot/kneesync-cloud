@@ -318,7 +318,7 @@ async function updateRunningAverages(db, patientId, tiltAngle, tremorRms, kneeAn
 // Register — ONLY patient role allowed (doctors must be promoted by admin)
 app.post('/api/auth/register', async (req, res) => {
   try {
-    const { email, password, full_name } = req.body;
+    const { email, password, full_name, device_id } = req.body;
     if (!email || !password || !full_name) {
       return res.status(400).json({ ok: false, error: 'Missing required fields' });
     }
@@ -340,8 +340,8 @@ app.post('/api/auth/register', async (req, res) => {
     const userId = result.lastID;
     
     await db.run(
-      'INSERT INTO patients (user_id, email, password, full_name) VALUES (?, ?, ?, ?)',
-      [userId, email, hashedPassword, full_name]
+      'INSERT INTO patients (user_id, email, password, full_name, device_id) VALUES (?, ?, ?, ?, ?)',
+      [userId, email, hashedPassword, full_name, device_id || null]
     );
     
     res.json({ ok: true, user_id: userId, role: userRole });

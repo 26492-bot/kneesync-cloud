@@ -317,6 +317,10 @@
           <label class="form-label">Password</label>
           <input type="password" id="regPassword" class="form-input" required>
         </div>
+        <div class="form-group">
+          <label class="form-label">Device ID (Optional)</label>
+          <input type="text" id="regDeviceId" class="form-input" placeholder="e.g. ESP32_KNEE_001">
+        </div>
         <button type="submit" class="btn-primary" id="regBtn">Create Patient Account</button>
         <div class="register-note">
           📋 สมัครสมาชิกเป็นผู้ป่วยเท่านั้น<br>
@@ -383,11 +387,12 @@
           <th>Name</th>
           <th>Email</th>
           <th>Role</th>
+          <th>Device ID</th>
           <th>Action</th>
         </tr>
       </thead>
       <tbody id="adminUserList">
-        <tr><td colspan="5" class="empty-state">Loading users...</td></tr>
+        <tr><td colspan="6" class="empty-state">Loading users...</td></tr>
       </tbody>
     </table>
   </div>

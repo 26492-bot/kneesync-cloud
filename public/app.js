@@ -64,6 +64,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const data = await res.json();
       if (data.ok) {
         currentUser = data.user;
+        currentUser.token = data.token;
         localStorage.setItem('kneesync_user', JSON.stringify(currentUser));
         routeUser();
       } else {
@@ -81,12 +82,13 @@ document.addEventListener('DOMContentLoaded', () => {
     const full_name = document.getElementById('regName').value;
     const email = document.getElementById('regEmail').value;
     const password = document.getElementById('regPassword').value;
+    const device_id = document.getElementById('regDeviceId').value;
     
     try {
       const res = await fetch(`${API_URL}/auth/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password, full_name })
+        body: JSON.stringify({ email, password, full_name, device_id })
       });
       const data = await res.json();
       if (data.ok) {
@@ -99,6 +101,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const loginData = await resLogin.json();
         if (loginData.ok) {
           currentUser = loginData.user;
+          currentUser.token = loginData.token;
           localStorage.setItem('kneesync_user', JSON.stringify(currentUser));
           routeUser();
         }
@@ -176,11 +179,13 @@ document.addEventListener('DOMContentLoaded', () => {
   async function loadAdminUsers() {
     const tbody = document.getElementById('adminUserList');
     try {
-      const res = await fetch(`${API_URL}/admin/users`);
+      const res = await fetch(`${API_URL}/admin/users`, {
+        headers: { 'Authorization': 'Bearer ' + currentUser.token }
+      });
       const data = await res.json();
       if (data.ok) {
         if (data.data.length === 0) {
-          tbody.innerHTML = '<tr><td colspan="5" class="empty-state">No users found.</td></tr>';
+          tbody.innerHTML = '<tr><td colspan="6" class="empty-state">No users found.</td></tr>';
           return;
         }
         tbody.innerHTML = data.data.map(u => {
@@ -193,6 +198,7 @@ document.addEventListener('DOMContentLoaded', () => {
               <td style="font-weight:600;">${u.full_name}</td>
               <td>${u.email}</td>
               <td><span style="background:var(--bg-glass); padding:4px 8px; border-radius:4px; font-size:12px; font-weight:700;">${roleLabel}</span></td>
+              <td><span style="color:var(--text-muted); font-family:monospace;">${u.device_id || '-'}</span></td>
               <td>
                 ${canPromote ? `<button class="btn-promote" onclick="promoteUser(${u.user_id}, '${u.full_name}')">Promote to Doctor</button>` : ''}
                 ${!isMe ? `<button class="btn-delete" onclick="deleteUser(${u.user_id})">Delete</button>` : '<span style="color:var(--text-muted); font-size:12px;">(You)</span>'}
@@ -202,7 +208,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }).join('');
       }
     } catch(err) {
-      tbody.innerHTML = '<tr><td colspan="5" class="empty-state" style="color:var(--accent-rose);">Error loading users.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="6" class="empty-state" style="color:var(--accent-rose);">Error loading users.</td></tr>';
     }
   }
 
@@ -213,7 +219,10 @@ document.addEventListener('DOMContentLoaded', () => {
     try {
       const res = await fetch(`${API_URL}/admin/promote`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + currentUser.token 
+        },
         body: JSON.stringify({
           user_id: userId,
           new_role: 'doctor',
@@ -236,7 +245,10 @@ document.addEventListener('DOMContentLoaded', () => {
   window.deleteUser = async function(userId) {
     if (confirm('Are you sure you want to delete this user? ALL their associated data (patients, sessions, readings) will be permanently lost!')) {
       try {
-        const res = await fetch(`${API_URL}/admin/users/${userId}`, { method: 'DELETE' });
+        const res = await fetch(`${API_URL}/admin/users/${userId}`, { 
+          method: 'DELETE',
+          headers: { 'Authorization': 'Bearer ' + currentUser.token }
+        });
         const data = await res.json();
         if (data.ok) {
           loadAdminUsers(); // Refresh table
