@@ -421,6 +421,77 @@ app.get('/api/admin/users', authGuard, async (req, res) => {
   }
 });
 
+// Add new user (Admin only)
+app.post('/api/admin/users', authGuard, async (req, res) => {
+  try {
+    const { email, password, full_name, role, device_id } = req.body;
+    if (!email || !password || !full_name || !role) {
+      return res.status(400).json({ ok: false, error: 'Missing required fields' });
+    }
+    const existing = await db.get('SELECT user_id FROM users WHERE email = ?', [email]);
+    if (existing) {
+      return res.status(400).json({ ok: false, error: 'Email already exists' });
+    }
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const result = await db.run(
+      'INSERT INTO users (email, password, full_name, role) VALUES (?, ?, ?, ?)',
+      [email, hashedPassword, full_name, role]
+    );
+    const userId = result.lastID;
+    if (role === 'patient') {
+      await db.run(
+        'INSERT INTO patients (user_id, email, password, full_name, device_id) VALUES (?, ?, ?, ?, ?)',
+        [userId, email, hashedPassword, full_name, device_id || null]
+      );
+    }
+    res.json({ ok: true, user_id: userId, role });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// Edit user (Admin only)
+app.put('/api/admin/users/:id', authGuard, async (req, res) => {
+  try {
+    const userId = req.params.id;
+    const { email, full_name, role, device_id } = req.body;
+    if (!email || !full_name || !role) {
+      return res.status(400).json({ ok: false, error: 'Missing required fields' });
+    }
+    const existing = await db.get('SELECT user_id FROM users WHERE email = ? AND user_id != ?', [email, userId]);
+    if (existing) {
+      return res.status(400).json({ ok: false, error: 'Email already in use by another user' });
+    }
+    const current = await db.get('SELECT role FROM users WHERE user_id = ?', [userId]);
+    if (!current) {
+      return res.status(404).json({ ok: false, error: 'User not found' });
+    }
+    
+    // Update users table
+    await db.run('UPDATE users SET full_name = ?, email = ?, role = ? WHERE user_id = ?', [full_name, email, role, userId]);
+    
+    // Handle role changes related to patients table
+    if (role === 'patient' && current.role !== 'patient') {
+      // Was not patient, now is patient
+      const user = await db.get('SELECT password FROM users WHERE user_id = ?', [userId]);
+      await db.run(
+        'INSERT INTO patients (user_id, email, password, full_name, device_id) VALUES (?, ?, ?, ?, ?)',
+        [userId, email, user.password, full_name, device_id || null]
+      );
+    } else if (role !== 'patient' && current.role === 'patient') {
+      // Was patient, now is not patient
+      await db.run('DELETE FROM patients WHERE user_id = ?', [userId]);
+    } else if (role === 'patient' && current.role === 'patient') {
+      // Update existing patient data
+      await db.run('UPDATE patients SET full_name = ?, email = ?, device_id = ? WHERE user_id = ?', [full_name, email, device_id || null, userId]);
+    }
+    
+    res.json({ ok: true, message: 'User updated' });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
 // Check all registered devices (Admin only)
 app.get('/api/admin/devices', authGuard, async (req, res) => {
   try {

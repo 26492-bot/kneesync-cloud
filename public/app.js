@@ -188,19 +188,21 @@ document.addEventListener('DOMContentLoaded', () => {
           tbody.innerHTML = '<tr><td colspan="6" class="empty-state">No users found.</td></tr>';
           return;
         }
-        tbody.innerHTML = data.data.map(u => {
+        tbody.innerHTML = data.data.map((u, index) => {
           const isMe = u.user_id === currentUser.user_id;
           const roleLabel = u.role.toUpperCase();
           const canPromote = !isMe && u.role === 'patient';
+          const safeData = encodeURIComponent(JSON.stringify(u));
           return `
             <tr>
-              <td>#${u.user_id}</td>
+              <td>${index + 1}</td>
               <td style="font-weight:600;">${u.full_name}</td>
               <td>${u.email}</td>
               <td><span style="background:var(--bg-glass); padding:4px 8px; border-radius:4px; font-size:12px; font-weight:700;">${roleLabel}</span></td>
               <td><span style="color:var(--text-muted); font-family:monospace;">${u.device_id || '-'}</span></td>
               <td>
-                ${canPromote ? `<button class="btn-promote" onclick="promoteUser(${u.user_id}, '${u.full_name}')">Promote to Doctor</button>` : ''}
+                <button class="btn-edit" onclick="openEditUserModal('${safeData}')">Edit</button>
+                ${canPromote ? `<button class="btn-promote" onclick="promoteUser(${u.user_id}, '${u.full_name}')">Promote</button>` : ''}
                 ${!isMe ? `<button class="btn-delete" onclick="deleteUser(${u.user_id})">Delete</button>` : '<span style="color:var(--text-muted); font-size:12px;">(You)</span>'}
               </td>
             </tr>
@@ -260,6 +262,88 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     }
   };
+
+  // --- Modal Logic ---
+  const addModal = document.getElementById('addUserModal');
+  const editModal = document.getElementById('editUserModal');
+  
+  document.getElementById('btnOpenAddUser')?.addEventListener('click', () => {
+    document.getElementById('addUserForm').reset();
+    addModal.style.display = 'flex';
+  });
+  document.getElementById('btnCloseAddUser')?.addEventListener('click', () => addModal.style.display = 'none');
+  document.getElementById('btnCancelAddUser')?.addEventListener('click', () => addModal.style.display = 'none');
+
+  document.getElementById('btnCloseEditUser')?.addEventListener('click', () => editModal.style.display = 'none');
+  document.getElementById('btnCancelEditUser')?.addEventListener('click', () => editModal.style.display = 'none');
+
+  document.getElementById('addRole')?.addEventListener('change', (e) => {
+    document.getElementById('addGroupDevice').style.display = e.target.value === 'patient' ? 'block' : 'none';
+  });
+  document.getElementById('editRole')?.addEventListener('change', (e) => {
+    document.getElementById('editGroupDevice').style.display = e.target.value === 'patient' ? 'block' : 'none';
+  });
+
+  window.openEditUserModal = function(encodedData) {
+    const u = JSON.parse(decodeURIComponent(encodedData));
+    document.getElementById('editUserId').value = u.user_id;
+    document.getElementById('editName').value = u.full_name;
+    document.getElementById('editEmail').value = u.email;
+    document.getElementById('editRole').value = u.role;
+    document.getElementById('editDeviceId').value = u.device_id || '';
+    document.getElementById('editGroupDevice').style.display = u.role === 'patient' ? 'block' : 'none';
+    editModal.style.display = 'flex';
+  };
+
+  document.getElementById('addUserForm')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const payload = {
+      full_name: document.getElementById('addName').value,
+      email: document.getElementById('addEmail').value,
+      password: document.getElementById('addPassword').value,
+      role: document.getElementById('addRole').value,
+      device_id: document.getElementById('addDeviceId').value
+    };
+    try {
+      const res = await fetch(`${API_URL}/admin/users`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + currentUser.token },
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+      if (data.ok) {
+        addModal.style.display = 'none';
+        loadAdminUsers();
+      } else {
+        alert('Failed to add user: ' + data.error);
+      }
+    } catch (err) { alert('Connection error'); }
+  });
+
+  document.getElementById('editUserForm')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const userId = document.getElementById('editUserId').value;
+    const payload = {
+      full_name: document.getElementById('editName').value,
+      email: document.getElementById('editEmail').value,
+      role: document.getElementById('editRole').value,
+      device_id: document.getElementById('editDeviceId').value
+    };
+    try {
+      const res = await fetch(`${API_URL}/admin/users/${userId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + currentUser.token },
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+      if (data.ok) {
+        editModal.style.display = 'none';
+        loadAdminUsers();
+      } else {
+        alert('Failed to update user: ' + data.error);
+      }
+    } catch (err) { alert('Connection error'); }
+  });
   
   // ==========================================
   // Doctor Dashboard Logic
