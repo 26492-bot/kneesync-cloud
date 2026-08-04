@@ -30,6 +30,27 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 // Dependencies for Auth
 const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
+
+const JWT_SECRET = process.env.JWT_SECRET || 'fallback_secret_key';
+
+const authGuard = (req, res, next) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ ok: false, error: 'Unauthorized' });
+  }
+  const token = authHeader.split(' ')[1];
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+    if (decoded.role !== 'admin') {
+      return res.status(403).json({ ok: false, error: 'Forbidden: Admin only' });
+    }
+    req.user = decoded;
+    next();
+  } catch (err) {
+    return res.status(401).json({ ok: false, error: 'Invalid token' });
+  }
+};
 
 // ============================================================
 //  LINE Messaging API — Fall Alert Notification
@@ -353,7 +374,13 @@ app.post('/api/auth/login', async (req, res) => {
       }
     }
     
-    res.json({ ok: true, user: { user_id: user.user_id, email: user.email, full_name: user.full_name, role: user.role, patient_id: patientId } });
+    const token = jwt.sign(
+      { user_id: user.user_id, role: user.role, patient_id: patientId },
+      JWT_SECRET,
+      { expiresIn: '24h' }
+    );
+    
+    res.json({ ok: true, user: { user_id: user.user_id, email: user.email, full_name: user.full_name, role: user.role, patient_id: patientId }, token });
   } catch (err) {
     res.status(500).json({ ok: false, error: err.message });
   }
@@ -380,7 +407,7 @@ app.get('/api/patients', async (req, res) => {
 // ============================================================
 
 // Get all users
-app.get('/api/admin/users', async (req, res) => {
+app.get('/api/admin/users', authGuard, async (req, res) => {
   try {
     const users = await db.all('SELECT user_id, full_name, email, role, created_at FROM users ORDER BY created_at DESC');
     res.json({ ok: true, data: users });
@@ -390,7 +417,7 @@ app.get('/api/admin/users', async (req, res) => {
 });
 
 // Promote user role (Admin only)
-app.post('/api/admin/promote', async (req, res) => {
+app.post('/api/admin/promote', authGuard, async (req, res) => {
   try {
     const { user_id, new_role, admin_email, admin_password } = req.body;
     
@@ -423,7 +450,7 @@ app.post('/api/admin/promote', async (req, res) => {
 });
 
 // Delete user by ID
-app.delete('/api/admin/users/:id', async (req, res) => {
+app.delete('/api/admin/users/:id', authGuard, async (req, res) => {
   try {
     const userId = parseInt(req.params.id);
     if (!userId) {
@@ -434,6 +461,35 @@ app.delete('/api/admin/users/:id', async (req, res) => {
     // Note: Due to ON DELETE CASCADE on foreign keys, patients/sessions/readings/alerts will be deleted automatically.
     
     res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// Force recalibration for a patient (Admin only)
+app.post('/api/patient/:id/recalibrate', authGuard, async (req, res) => {
+  try {
+    const patientId = parseInt(req.params.id);
+    if (!patientId) {
+      return res.status(400).json({ ok: false, error: 'Invalid patient ID' });
+    }
+    
+    // Clear baseline data
+    await db.run(
+      `UPDATE patients SET 
+        baseline_status = 'pending',
+        baseline_samples = 0,
+        baseline_mean = NULL,
+        baseline_sd = NULL,
+        baseline_angle = NULL
+      WHERE patient_id = ?`,
+      [patientId]
+    );
+    
+    // Delete existing baseline steps
+    await db.run('DELETE FROM baseline_steps WHERE patient_id = ?', [patientId]);
+    
+    res.json({ ok: true, message: 'Patient reset to pending calibration' });
   } catch (err) {
     res.status(500).json({ ok: false, error: err.message });
   }

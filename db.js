@@ -187,6 +187,13 @@ async function setupDB() {
     // ============================================================
     //  Seed Admin User (password from env, NOT hardcoded)
     // ============================================================
+    const deleteAdminSql = "DELETE FROM users WHERE email = 'admin@kneesync.com'";
+    if (isPostgres) {
+      await dbInstance.query(deleteAdminSql).catch(e => console.log(e.message));
+    } else {
+      try { await dbInstance.run(deleteAdminSql); } catch(e) {}
+    }
+
     let checkAdminSql = "SELECT user_id FROM users WHERE email = 'admin@kneesync.com'";
     let adminExists = false;
     if (isPostgres) {
