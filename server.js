@@ -406,11 +406,31 @@ app.get('/api/patients', async (req, res) => {
 //  API: Admin Routes
 // ============================================================
 
-// Get all users
+// Get all users (now includes patient device_id if they are a patient)
 app.get('/api/admin/users', authGuard, async (req, res) => {
   try {
-    const users = await db.all('SELECT user_id, full_name, email, role, created_at FROM users ORDER BY created_at DESC');
+    const users = await db.all(`
+      SELECT u.user_id, u.full_name, u.email, u.role, u.created_at, p.device_id
+      FROM users u
+      LEFT JOIN patients p ON u.user_id = p.user_id
+      ORDER BY u.created_at DESC
+    `);
     res.json({ ok: true, data: users });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// Check all registered devices (Admin only)
+app.get('/api/admin/devices', authGuard, async (req, res) => {
+  try {
+    const devices = await db.all(`
+      SELECT patient_id, full_name, device_id, baseline_status, battery_level, firmware_version 
+      FROM patients 
+      WHERE device_id IS NOT NULL 
+      ORDER BY patient_id DESC
+    `);
+    res.json({ ok: true, data: devices });
   } catch (err) {
     res.status(500).json({ ok: false, error: err.message });
   }

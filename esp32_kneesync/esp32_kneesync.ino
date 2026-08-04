@@ -2,12 +2,12 @@
 #include <HTTPClient.h>
 #include <ArduinoJson.h>
 
-const char* ssid = "YOUR_WIFI_SSID";
-const char* password = "YOUR_WIFI_PASSWORD";
+const char* ssid = "V";
+const char* password = "11111111";
 
 // Replace with your server URL
-const char* serverUrl = "http://YOUR_SERVER_IP:3000/api/ingest"; 
-const char* deviceId = "ESP32_KNEE_001";
+const char* serverUrl = "http://192.168.112.95/api/ingest"; 
+const char* deviceId = "ESP32_KNEE_004";
 
 void setup() {
   Serial.begin(115200);
